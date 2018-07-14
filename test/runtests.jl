@@ -39,49 +39,27 @@ end
 if grb
     mip_solvers["Gurobi"] = Gurobi.GurobiSolver(OutputFlag=0, IntFeasTol=tol_int, FeasibilityTol=tol_feas, MIPGap=tol_gap)
 end
-#if cbc
-#    mip_solvers["CBC"] = Cbc.CbcSolver(logLevel=0, integerTolerance=tol_int, primalTolerance=tol_feas, ratioGap=tol_gap, check_warmstart=false)
-#end
-
-# NLP solvers
-cont_solvers = Dict{String,MathProgBase.AbstractMathProgSolver}()
-if ipt
-    cont_solvers["Ipopt"] = Ipopt.IpoptSolver(print_level=0)
-end
-if kni
-    cont_solvers["Knitro"] = KNITRO.KnitroSolver(objrange=1e16, outlev=0, maxit=100000)
-end
 
 # print solvers
 println("\nMILP solvers:")
 for (i, sname) in enumerate(keys(mip_solvers))
     @printf "%2d  %s\n" i sname
 end
-println("\nNLP solvers:")
-for (i, sname) in enumerate(keys(cont_solvers))
-    @printf "%2d  %s\n" i sname
-end
-println()
 
 # run tests
-@testset "Algorithm - $(msd ? "MSD" : "Iter")" for msd in [false, true]
-    @testset "MILP solver - $mipname" for (mipname, mip) in mip_solvers
-        if msd && !applicable(MathProgBase.setlazycallback!, MathProgBase.ConicModel(mip), x -> x)
-            # Only test MSD on lazy callback solvers
-            continue
-        end
-        @testset "NLP models - $conname" for (conname, con) in cont_solvers
-            println("\nNLP models: $(msd ? "MSD" : "Iter"), $mipname, $conname")
-            run_qp(msd, mip, con, ll, redirect)
-            run_nlp(msd, mip, con, ll, redirect)
-        end
-        @testset "Exp+SOC models - $conname" for (conname, con) in cont_solvers
-            println("\nExp+SOC models: $(msd ? "MSD" : "Iter"), $mipname, $conname")
-            run_soc(msd, mip, con, ll, redirect)
-            run_expsoc(msd, mip, con, ll, redirect)
-        end
-        flush(STDOUT)
-        flush(STDERR)
+@testset "MILP solver - $mipname" for (mipname, mip) in mip_solvers
+    @testset "NLP models" begin
+        println("\nNLP models")
+        run_qp(mip, ll, redirect)
+        run_nlp(mip, ll, redirect)
+    end
+    @testset "Exp+SOC models" begin
+        println("\nExp+SOC models")
+        run_soc(mip, ll, redirect)
+        run_expsoc(mip, ll, redirect)
     end
     println()
+    flush(STDOUT)
+    flush(STDERR)
 end
+println()

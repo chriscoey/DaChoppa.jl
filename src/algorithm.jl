@@ -60,14 +60,13 @@ end
 
 MathProgBase.numvar(m::DaChoppaNonlinearModel) = m.numvar
 MathProgBase.numconstr(m::DaChoppaNonlinearModel) = m.numconstr
-MathProgBase.setwarmstart!(m::DaChoppaNonlinearModel, x::Vector{Real}) = (m.incumbent = x) # TODO set values on mip model, maybe add cuts at point
+MathProgBase.setwarmstart!(m::DaChoppaNonlinearModel, x) = (m.incumbent = x) # TODO set values on mip model, maybe add cuts at point
 MathProgBase.setvartype!(m::DaChoppaNonlinearModel, v::Vector{Symbol}) = (m.vartypes = v)
 
 function MathProgBase.loadproblem!(m::DaChoppaNonlinearModel, numvar, numconstr, l, u, lb, ub, sense, d)
     m.numvar = numvar
     m.numconstr = numconstr
     m.sense = sense
-    m.vartypes = fill(:Cont, numvar)
     m.incumbent = fill(NaN, numvar)
 
     MathProgBase.initialize(d, [:Jac])
@@ -151,6 +150,10 @@ function MathProgBase.optimize!(m::DaChoppaNonlinearModel)
     totaltime = time()
     m.status = :Unsolved
 
+    for j in 1:m.numvar
+        setcategory(m.x[j], m.vartypes[j])
+    end
+
     conoa = zeros(m.numconstr)
     (jac_I, jac_J) = MathProgBase.jac_structure(m.d)
     jac_V = zeros(length(jac_I))
@@ -191,16 +194,29 @@ function MathProgBase.optimize!(m::DaChoppaNonlinearModel)
         MathProgBase.setparameters!(m.mip_solver, TimeLimit=max(0.1, m.timeout - (time() - totaltime)))
         setsolver(m.oam, m.mip_solver)
     end
+    if m.log_level > 0
+        println("\nDaChoppa solver starting...")
+    end
     mip_time = time()
     status_mip = solve(m.oam, suppress_warnings=true)
     mip_time = time() - mip_time
 
-    if status_mip in (:Optimal, :Suboptimal, :UserLimit)
+    if status_mip in (:Optimal, :Suboptimal)
         m.incumbent = getvalue(m.x)
         m.objval = getobjectivevalue(m.oam)
         m.objbound = MathProgBase.getobjbound(m.oam)
         @assert isfinite(m.objval) && isfinite(m.objbound)
         m.objgap = (m.objval - m.objbound)/(abs(m.objval) + 1e-5)
+        m.status = status_mip
+    elseif status_mip == :UserLimit
+        m.objval = getobjectivevalue(m.oam)
+        m.objbound = MathProgBase.getobjbound(m.oam)
+        if isfinite(m.objval)
+            m.incumbent = getvalue(m.x)
+            if isfinite(m.objbound)
+                m.objgap = (m.objval - m.objbound)/(abs(m.objval) + 1e-5)
+            end
+        end
         m.status = status_mip
     elseif status_mip == :Infeasible
         m.status = status_mip
@@ -215,16 +231,17 @@ function MathProgBase.optimize!(m::DaChoppaNonlinearModel)
     m.totaltime = time() - totaltime
     if m.log_level > 0
         println("\nDaChoppa solver finished...")
-        @printf "\nStatus          : %13s\n" m.status
+        @printf "Status           %13s\n" m.status
         if isfinite(m.objgap)
-            @printf "Objective value : %13.5f\n" (m.sense == :Min) ? m.objval : -m.objval
-            @printf "Objective bound : %13.5f\n" (m.sense == :Min) ? m.objbound : -m.objbound
-            @printf "Objective gap   : %13.5f\n" (m.sense == :Min) ? m.objgap : -m.objgap
+            @printf "Objective value  %13.5f\n" (m.sense == :Min) ? m.objval : -m.objval
+            @printf "Objective bound  %13.5f\n" (m.sense == :Min) ? m.objbound : -m.objbound
+            @printf "Objective gap    %13.5f\n" (m.sense == :Min) ? m.objgap : -m.objgap
         end
-        @printf "Total time      : %13.5f s\n" m.totaltime
-        @printf "MIP time        : %13.5f s\n" mip_time
-        @printf "Cuts added      : %13d\n" num_cuts
-        @printf "Callbacks       : %13d\n" num_cbs
+        @printf "Total time       %13.5f s\n" m.totaltime
+        @printf "MIP time         %13.5f s\n" mip_time
+        @printf "Cuts added       %13d\n" num_cuts
+        @printf "Callbacks        %13d\n" num_cbs
+        println()
     end
 end
 

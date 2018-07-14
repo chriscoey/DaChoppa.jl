@@ -55,21 +55,21 @@ function solve_jump(testname, m, redirect)
 end
 
 # quadratic program tests
-function run_qp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
-    solver=DaChoppaSolver(timeout=120., mip_solver=mip_solver, cont_solver=cont_solver, log_level=(redirect ? 0 : 3))
+function run_qp(mip_solver, log_level, redirect)
+    solver=DaChoppaSolver(timeout=120., mip_solver=mip_solver, log_level=(redirect ? 0 : 3))
 
     testname = "QP optimal"
     @testset "$testname" begin
         m = Model(solver=solver)
 
-        @variable(m, x >= 0, Int)
+        @variable(m, 0 <= x <= 10/3, Int)
         @variable(m, y >= 0)
         @variable(m, 0 <= u <= 10, Int)
         @variable(m, w == 1)
 
         @objective(m, Min, -3x - y)
 
-        @constraint(m, 3x + 10 <= 20)
+        @constraint(m, 3x + 2y <= 18)
         @constraint(m, y^2 <= u*w)
 
         status = solve_jump(testname, m, redirect)
@@ -106,8 +106,8 @@ function run_qp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
 end
 
 # NLP model tests
-function run_nlp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
-    solver=DaChoppaSolver(timeout=120., mip_solver=mip_solver, cont_solver=cont_solver, log_level=(redirect ? 0 : 3))
+function run_nlp(mip_solver, log_level, redirect)
+    solver=DaChoppaSolver(timeout=120., mip_solver=mip_solver, log_level=(redirect ? 0 : 3))
 
     testname = "Nonconvex error"
     @testset "$testname" begin
@@ -183,25 +183,25 @@ function run_nlp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect
         @test status == :Infeasible
     end
 
-    testname = "Continuous error"
-    @testset "$testname" begin
-        m = Model(solver=solver)
-
-        @variable(m, x >= 0, start = 1)
-        @variable(m, y >= 0, start = 1)
-
-        @objective(m, Min, -3x - y)
-
-        @constraint(m, 3x + 2y + 10 <= 20)
-        @constraint(m, x >= 1)
-
-        @NLconstraint(m, x^2 <= 5)
-        @NLconstraint(m, exp(y) + x <= 7)
-
-        status = solve_jump(testname, m, redirect)
-
-        @test isa(status, ErrorException)
-    end
+    # testname = "Continuous error"
+    # @testset "$testname" begin
+    #     m = Model(solver=solver)
+    #
+    #     @variable(m, x >= 0, start = 1)
+    #     @variable(m, y >= 0, start = 1)
+    #
+    #     @objective(m, Min, -3x - y)
+    #
+    #     @constraint(m, 3x + 2y + 10 <= 20)
+    #     @constraint(m, x >= 1)
+    #
+    #     @NLconstraint(m, x^2 <= 5)
+    #     @NLconstraint(m, exp(y) + x <= 7)
+    #
+    #     status = solve_jump(testname, m, redirect)
+    #
+    #     @test isa(status, ErrorException)
+    # end
 
     testname = "Maximization"
     @testset "$testname" begin
@@ -221,22 +221,22 @@ function run_nlp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect
         @test isapprox(getobjectivevalue(m), 9.5, atol=TOL)
     end
 
-    testname = "Nonlinear objective"
-    @testset "$testname" begin
-        m = Model(solver=solver)
-
-        @variable(m, x >= 0, start = 1, Int)
-        @variable(m, y >= 0, start = 1)
-
-        @objective(m, Max, -x^2 - y)
-
-        @constraint(m, x + 2y >= 4)
-        @NLconstraint(m, x^2 <= 9)
-
-        status = solve_jump(testname, m, redirect)
-
-        @test status == :Optimal
-        @test isapprox(getobjectivevalue(m), -2.0, atol=TOL)
-        @test isapprox(getobjbound(m), -2.0, atol=TOL)
-    end
+    # testname = "Nonlinear objective"
+    # @testset "$testname" begin
+    #     m = Model(solver=solver)
+    #
+    #     @variable(m, x >= 0, start = 1, Int)
+    #     @variable(m, y >= 0, start = 1)
+    #
+    #     @objective(m, Max, -x^2 - y)
+    #
+    #     @constraint(m, x + 2y >= 4)
+    #     @NLconstraint(m, x^2 <= 9)
+    #
+    #     status = solve_jump(testname, m, redirect)
+    #
+    #     @test status == :Optimal
+    #     @test isapprox(getobjectivevalue(m), -2.0, atol=TOL)
+    #     @test isapprox(getobjbound(m), -2.0, atol=TOL)
+    # end
 end
